@@ -23,7 +23,10 @@ model.load_weights(WEIGHTS_PATH)
 app = FastAPI(title="MNIST Digit Recognizer API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://mnist-nn-visualizer-seven.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
