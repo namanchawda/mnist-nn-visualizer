@@ -2,7 +2,7 @@
 
 A handwritten digit classifier where every part of the neural network — forward propagation, backpropagation, and gradient descent — is implemented by hand using only NumPy. No PyTorch, TensorFlow, or scikit-learn is used for the model itself. Paired with a live drawing canvas that samples predictions every 300ms while you draw, and a real-time visualization of the network's internal neuron activations.
 
-**Live demo:** https://mnist-nn-visualizer-seven.vercel.app/
+**Live demo:** https://mnist-neural-network-from-scratch.vercel.app/
 
 ## Why build this
 
