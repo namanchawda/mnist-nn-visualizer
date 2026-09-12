@@ -25,7 +25,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://mnist-nn-visualizer-seven.vercel.app",
+        "https://mnist-neural-network-from-scratch.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
