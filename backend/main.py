@@ -1,4 +1,10 @@
-"""FastAPI application serving predictions from the trained NumPy model."""
+"""FastAPI application serving predictions from the trained NumPy model.
+
+OPTIONAL: the deployed app performs all inference client-side from
+frontend/public/weights.json and never calls this server. It is kept for local
+development and for verifying the NumPy reference implementation (along with
+backend/neural_network.py, which also powers backend/export_weights.py).
+"""
 
 from __future__ import annotations
 

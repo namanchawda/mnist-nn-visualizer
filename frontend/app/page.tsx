@@ -3,21 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 
 import NetworkVisualization from "./NetworkVisualization";
+import { forward, loadWeights } from "../lib/network";
+import { preprocess } from "../lib/preprocess";
 
 const CANVAS_SIZE = 280;
-const MNIST_SIZE = 28;
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/predict`;
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
+  const modelReadyRef = useRef(false);
+  const [modelReady, setModelReady] = useState(false);
+  const [modelFailed, setModelFailed] = useState(false);
   const [probabilities, setProbabilities] = useState<number[]>(Array(10).fill(0));
   const [hidden1Activations, setHidden1Activations] = useState<number[]>(Array(128).fill(0));
   const [hidden2Activations, setHidden2Activations] = useState<number[]>(Array(64).fill(0));
   const [predictedDigit, setPredictedDigit] = useState<number | null>(null);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -26,6 +28,14 @@ export default function Home() {
     if (!context) return;
     context.fillStyle = "#050505";
     context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    // Load the trained weights once; inference then runs fully client-side.
+    loadWeights()
+      .then(() => {
+        modelReadyRef.current = true;
+        setModelReady(true);
+      })
+      .catch(() => setModelFailed(true));
   }, []);
 
   useEffect(() => {
@@ -35,44 +45,17 @@ export default function Home() {
   }, []);
 
   const predict = () => {
+    if (!modelReadyRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const input = preprocess(canvas);
+    if (!input) return; // blank canvas, nothing drawn yet
 
-    // The small canvas lets the browser perform the MNIST-sized downsampling.
-    const smallCanvas = document.createElement("canvas");
-    smallCanvas.width = MNIST_SIZE;
-    smallCanvas.height = MNIST_SIZE;
-    const smallContext = smallCanvas.getContext("2d");
-    if (!smallContext) return;
-    smallContext.drawImage(canvas, 0, 0, MNIST_SIZE, MNIST_SIZE);
-
-    const pixels = smallContext.getImageData(0, 0, MNIST_SIZE, MNIST_SIZE).data;
-    const normalized = Array.from({ length: MNIST_SIZE * MNIST_SIZE }, (_, index) =>
-      pixels[index * 4] / 255,
-    );
-
-    fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pixels: normalized }),
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Backend returned ${response.status}`);
-        return response.json() as Promise<{
-          probabilities: number[];
-          predicted_digit: number;
-          hidden1_activations: number[];
-          hidden2_activations: number[];
-        }>;
-      })
-      .then((result) => {
-        setProbabilities(result.probabilities);
-        setHidden1Activations(result.hidden1_activations);
-        setHidden2Activations(result.hidden2_activations);
-        setPredictedDigit(result.predicted_digit);
-        setError("");
-      })
-      .catch(() => setError("Could not reach the prediction server. Is FastAPI running?"));
+    const result = forward(input);
+    setProbabilities(result.probabilities);
+    setHidden1Activations(result.hidden1);
+    setHidden2Activations(result.hidden2);
+    setPredictedDigit(result.predicted);
   };
 
   const stopDrawing = () => {
@@ -139,7 +122,6 @@ export default function Home() {
     setHidden1Activations(Array(128).fill(0));
     setHidden2Activations(Array(64).fill(0));
     setPredictedDigit(null);
-    setError("");
   };
 
   return (
@@ -162,6 +144,7 @@ export default function Home() {
             aria-label="Drawing canvas"
           />
           <button onClick={clearCanvas} className="mt-5 rounded-full border border-white/20 px-6 py-2 text-sm font-semibold transition hover:border-orange-400 hover:text-orange-300">Clear</button>
+          {modelReady && <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-[#8e8b84]">Model loaded — running in your browser</p>}
         </section>
 
         <section className="mt-10">
@@ -189,7 +172,14 @@ export default function Home() {
               </div>
             ))}
           </div>
-          {error && <p className="mt-5 text-sm text-red-400">{error}</p>}
+          {modelFailed && (
+            <p className="mt-5 text-sm text-red-400">
+              Failed to load the model weights (weights.json). Try refreshing the page.
+            </p>
+          )}
+          {!modelReady && !modelFailed && (
+            <p className="mt-5 text-sm text-[#8e8b84]">Loading model…</p>
+          )}
         </section>
       </div>
     </main>
