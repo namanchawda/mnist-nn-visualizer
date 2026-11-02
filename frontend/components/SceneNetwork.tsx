@@ -12,8 +12,8 @@ import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { ComponentRef, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-import type { Weights } from "../../lib/internal/forward";
-import { loadWeights } from "../../lib/network";
+import type { Weights } from "../lib/internal/forward";
+import { loadWeights } from "../lib/network";
 
 /* ------------------------------------------------------------------ */
 /* Tuning constants                                                    */

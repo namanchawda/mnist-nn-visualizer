@@ -122,7 +122,7 @@ const DrawCanvas = forwardRef<DrawCanvasHandle, DrawCanvasProps>(function DrawCa
       onPointerMove={draw}
       onPointerUp={stopDrawing}
       onPointerLeave={stopDrawing}
-      className="h-[280px] w-[280px] touch-none cursor-crosshair rounded-lg border border-white/10"
+      className="aspect-square h-auto w-full touch-none cursor-crosshair rounded-lg border border-white/10"
       aria-label="Drawing canvas"
     />
   );

@@ -1,6 +1,6 @@
 # MNIST Digit Recognizer — Neural Network Built From Scratch
 
-A handwritten digit classifier where every part of the neural network — forward propagation, backpropagation, and gradient descent — is implemented by hand using only NumPy. No PyTorch, TensorFlow, or scikit-learn is used for the model itself. Paired with a live drawing canvas that samples predictions every 300ms while you draw, and a real-time visualization of the network's internal neuron activations. Inference and preprocessing run entirely in the browser — there is no prediction server at runtime.
+A handwritten digit classifier where every part of the neural network — forward propagation, backpropagation, and gradient descent — is implemented by hand using only NumPy. No PyTorch, TensorFlow, or scikit-learn is used for the model itself. The live demo is a fully interactive 3D experience: draw on the shared canvas, and the network's internal activations and decision trace are rendered in real time with Three.js. Inference and preprocessing run entirely in the browser — there is no prediction server at runtime.
 
 **Live demo:** https://mnist-neural-network-from-scratch.vercel.app/
 
@@ -12,13 +12,17 @@ Frameworks like PyTorch hide the actual mechanics of how a neural network learns
 
 ```text
 Next.js frontend (all inference runs here, fully client-side)
-- Drawable canvas (280x280)
+- Shared drawing canvas (280x280 internal, responsive CSS size)
 - Every 300ms while drawing: samples canvas, downsamples to 28x28
 - Replicates MNIST-style centering in TypeScript (lib/preprocess.ts)
 - Runs the forward pass in hand-written TypeScript (lib/network.ts)
-- Live-updating probability bars (digits 0-9)
-- Live neural network activation visualization (all 128+64+10 neurons)
+- Three.js network scene (components/SceneNetwork.tsx, lazy-loaded):
+  four instanced layers (784/128/64/10), translucent panel frames,
+  contribution-colored edges, screen-fixed labels with percentages
+- Compact probability grid (2x5) and large digit readout
 - /weights.json: exported trained weights, loaded once at page mount
+- Three.js stays out of the initial bundle: the scene chunk is loaded
+  through next/dynamic with ssr:false only
 
 Training + export (offline, once)
 - Downloads and parses the original MNIST binary format directly
@@ -41,6 +45,18 @@ Optional FastAPI backend (not needed at runtime)
 
 Trained for 15 epochs on the full 60,000-image MNIST training set, reaching **97.8% accuracy** on the 10,000-image held-out test set.
 
+## 3D visualization
+
+The home page renders the network as a 3D scene (`frontend/components/SceneNetwork.tsx`). Each layer is one instanced mesh driven directly by the activations the browser computes every frame — the scene never re-runs inference, it only visualizes it.
+
+- **Decision trace mode (default):** the scene traces a narrow beam backward from the winning output neuron — the strongest hidden-2 neurons feeding it, then the strongest hidden-1 neurons feeding each of those, then the strongest input pixels feeding each of those (~6 → 4 → 4 chain). Neurons and pixels outside the trace dim; the beam stays full-brightness so you can literally see "why" the network picked its digit.
+- **Edges are chosen by contribution:** each candidate edge's magnitude is `activation(prev) × weight(s→t)` (the actual forward-pass term). Edges are colored orange (positive contribution) or blue (negative). Trace mode shares the same math, just restricted to the beam. A "Trace: on/off" toggle swaps to a global top-K flow view showing the strongest edges across every layer pair.
+- **Controls:** drag to orbit (single-finger drag rotates only inside the scene; the page scrolls normally around it), pinch/scroll to zoom, hover any neuron for its layer/index/value tooltip, click a hidden neuron to pin its strongest incoming/outgoing edges (click again or press the background to unpin). Overlay buttons: trace toggle, reset view (returns to the auto-fitted framing), fullscreen (with a fixed-overlay fallback when the Fullscreen API is unavailable, e.g. iOS Safari). "Reset view" and auto-fit keep the whole network centered and visible across resize and orientation changes.
+
+The scene keeps its render budget honest on weaker devices: fewer edges, no bloom, and lower resolution on small/low-power screens.
+
+> The original 2D experience (canvas-based activation visualization as the home page) is preserved under the git tag `2d-view`; old `/3d` links redirect to `/`.
+
 ## A real bug: freehand drawings predicted poorly despite 97.8% test accuracy
 
 Early testing showed the model performing noticeably worse on hand-drawn digits in the browser than its test-set accuracy suggested it should.
@@ -59,6 +75,21 @@ Early testing showed the model performing noticeably worse on hand-drawn digits 
 - **Optional dev server:** FastAPI (backend/main.py)
 - **Data:** original MNIST binary format, parsed directly (IDX file format)
 
+## Project structure
+
+```text
+frontend/
+- app/page.tsx              home page: canvas card + 3D stage + probability grid
+- app/globals.css           Tailwind + digit-pop animation
+- components/DrawCanvas.tsx 280x280 drawing surface, stroke + sampling loop
+- components/SceneNetwork.tsx Three.js scene (react-three-fiber + drei)
+- hooks/usePrediction.ts    model load + sample/reset state machine
+- lib/                      preprocess + hand-written forward pass
+- public/weights.json       exported trained weights (6 sig digits)
+backend/                    NumPy training, export, optional FastAPI
+verify/                     NumPy <-> TypeScript parity checks
+```
+
 ## Running locally
 
 The app needs no prediction server — only the Next.js frontend:
@@ -69,7 +100,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 and start drawing. The frontend loads the trained weights once from `/weights.json` (see `frontend/public/weights.json`), then runs preprocessing and inference entirely in your browser.
+Open http://localhost:3000 and start drawing — the 3D network view is the home page now. The frontend loads the trained weights once from `/weights.json` (see `frontend/public/weights.json`), then runs preprocessing and inference entirely in your browser.
 
 ## Retraining and re-exporting weights
 

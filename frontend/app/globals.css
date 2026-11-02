@@ -24,3 +24,21 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Recognized-digit readout: plays only when the displayed digit changes
+ * (the element is keyed by the digit value). */
+@keyframes digit-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.digit-pop {
+  display: inline-block;
+  animation: digit-pop 220ms ease-out;
+}
