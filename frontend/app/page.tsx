@@ -1,127 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRef } from "react";
 
 import NetworkVisualization from "./NetworkVisualization";
-import { forward, loadWeights } from "../lib/network";
-import { preprocess } from "../lib/preprocess";
-
-const CANVAS_SIZE = 280;
+import DrawCanvas, { DrawCanvasHandle } from "../components/DrawCanvas";
+import { usePrediction } from "../hooks/usePrediction";
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-  const drawingRef = useRef(false);
-  const modelReadyRef = useRef(false);
-  const [modelReady, setModelReady] = useState(false);
-  const [modelFailed, setModelFailed] = useState(false);
-  const [probabilities, setProbabilities] = useState<number[]>(Array(10).fill(0));
-  const [hidden1Activations, setHidden1Activations] = useState<number[]>(Array(128).fill(0));
-  const [hidden2Activations, setHidden2Activations] = useState<number[]>(Array(64).fill(0));
-  const [predictedDigit, setPredictedDigit] = useState<number | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.fillStyle = "#050505";
-    context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-    // Load the trained weights once; inference then runs fully client-side.
-    loadWeights()
-      .then(() => {
-        modelReadyRef.current = true;
-        setModelReady(true);
-      })
-      .catch(() => setModelFailed(true));
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  const predict = () => {
-    if (!modelReadyRef.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const input = preprocess(canvas);
-    if (!input) return; // blank canvas, nothing drawn yet
-
-    const result = forward(input);
-    setProbabilities(result.probabilities);
-    setHidden1Activations(result.hidden1);
-    setHidden2Activations(result.hidden2);
-    setPredictedDigit(result.predicted);
-  };
-
-  const stopDrawing = () => {
-    drawingRef.current = false;
-    lastPointRef.current = null;
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
-
-  const pointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const bounds = canvas.getBoundingClientRect();
-    return {
-      x: ((event.clientX - bounds.left) / bounds.width) * CANVAS_SIZE,
-      y: ((event.clientY - bounds.top) / bounds.height) * CANVAS_SIZE,
-    };
-  };
-
-  const startDrawing = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    canvas.setPointerCapture(event.pointerId);
-    const point = pointFromEvent(event);
-    drawingRef.current = true;
-    lastPointRef.current = point;
-    context.fillStyle = "white";
-    context.beginPath();
-    context.arc(point.x, point.y, 9, 0, Math.PI * 2);
-    context.fill();
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(predict, 300);
-  };
-
-  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current) return;
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    const currentPoint = pointFromEvent(event);
-    if (!canvas || !context || !lastPointRef.current) return;
-    context.strokeStyle = "white";
-    context.lineWidth = 18;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.beginPath();
-    context.moveTo(lastPointRef.current.x, lastPointRef.current.y);
-    context.lineTo(currentPoint.x, currentPoint.y);
-    context.stroke();
-    lastPointRef.current = currentPoint;
-  };
+  const drawCanvasRef = useRef<DrawCanvasHandle>(null);
+  const {
+    ready,
+    error,
+    hidden1: hidden1Activations,
+    hidden2: hidden2Activations,
+    probabilities,
+    predicted: predictedDigit,
+    sample,
+    reset,
+  } = usePrediction(canvasRef);
 
   const clearCanvas = () => {
-    stopDrawing();
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (canvas && context) {
-      context.fillStyle = "#050505";
-      context.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-    }
-    setProbabilities(Array(10).fill(0));
-    setHidden1Activations(Array(128).fill(0));
-    setHidden2Activations(Array(64).fill(0));
-    setPredictedDigit(null);
+    drawCanvasRef.current?.clear();
+    reset();
   };
 
   return (
@@ -132,19 +34,9 @@ export default function Home() {
         <p className="mt-4 max-w-lg text-[#a8a49c]">A handwritten digit is sampled every 300ms and passed through a neural network built from scratch.</p>
 
         <section className="mt-10 flex flex-col items-center rounded-3xl border border-white/10 bg-[#1b1b18] p-6 shadow-2xl sm:p-9">
-          <canvas
-            ref={canvasRef}
-            width={CANVAS_SIZE}
-            height={CANVAS_SIZE}
-            onPointerDown={startDrawing}
-            onPointerMove={draw}
-            onPointerUp={stopDrawing}
-            onPointerLeave={stopDrawing}
-            className="h-[280px] w-[280px] touch-none cursor-crosshair rounded-lg border border-white/10"
-            aria-label="Drawing canvas"
-          />
+          <DrawCanvas ref={drawCanvasRef} canvasRef={canvasRef} onSample={sample} />
           <button onClick={clearCanvas} className="mt-5 rounded-full border border-white/20 px-6 py-2 text-sm font-semibold transition hover:border-orange-400 hover:text-orange-300">Clear</button>
-          {modelReady && <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-[#8e8b84]">Model loaded — running in your browser</p>}
+          {ready && <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.2em] text-[#8e8b84]">Model loaded — running in your browser</p>}
         </section>
 
         <section className="mt-10">
@@ -172,15 +64,21 @@ export default function Home() {
               </div>
             ))}
           </div>
-          {modelFailed && (
+          {error && (
             <p className="mt-5 text-sm text-red-400">
               Failed to load the model weights (weights.json). Try refreshing the page.
             </p>
           )}
-          {!modelReady && !modelFailed && (
+          {!ready && !error && (
             <p className="mt-5 text-sm text-[#8e8b84]">Loading model…</p>
           )}
         </section>
+
+        <p className="mt-10 text-center">
+          <Link href="/3d" className="font-mono text-xs uppercase tracking-[0.25em] text-[#a8a49c] transition hover:text-orange-300">
+            View the network in 3D →
+          </Link>
+        </p>
       </div>
     </main>
   );
